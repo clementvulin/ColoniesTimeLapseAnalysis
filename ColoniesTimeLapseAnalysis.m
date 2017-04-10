@@ -198,16 +198,32 @@ end
 %     end
 %     set(handles.UserMess, 'String', 'found previous analysis, loaded it into Matlab');
 % elseif 
-if exist ([handles.dir '/sidesave.mat'], 'file')&& exist ([handles.dir '/stoped_at.mat'], 'file') %check for an older saved analysis
+if size(dir([handles.dir, '/', '*','_all.mat']),1) %there is a _all.mat file
+    fileSaved=dir([handles.dir, '/', '*','_all.mat']);
+    fileload=load([handles.dir, '/', fileSaved(1).name]); %nb: here, if there are several matching files, Matlab takes the first one
+    handles.counts=fileload.counts;
+    handles.i=fileload.i;
+    handles.maxRad=fileload.maxRad;
+    handles.minRad=fileload.minRad;
+    handles.Rad=fileload.Rad;
+    handles.RadMean=fileload.RadMean;
+    handles.RadMean2=fileload.RadMean2;
+    handles.sensitivity=fileload.sensitivity;
+    
+    set(handles.UserMess, 'String', ['found ',fileSaved(1).name ,', loaded it into Matlab']);
+    
+elseif exist ([handles.dir '/sidesave.mat'], 'file')&& exist ([handles.dir '/stoped_at.mat'], 'file') %check for an older saved analysis
     handles.countsload=load([handles.dir '/sidesave.mat']); %this file was produced when saving
     handles.oldiload=load([handles.dir '/stoped_at.mat']); %this file was produced when saving
     handles.counts=handles.countsload.counts; %because load gives a struct object
     handles.oldi=handles.oldiload.i;
     set(handles.UserMess, 'String', 'found previous analysis, loaded it into Matlab');
+
 elseif exist([handles.dir '/counts.mat'], 'file')
     handles.countsload=load ([handles.dir '/counts.mat']); %this file was produced when analysing
     handles.counts=handles.countsload.counts; %because load gives a struct object
     handles.oldi=1; %start from the start!
+    
 else %nothing found
     handles.counts=cell(length(handles.l),2); %creating empty cell with the nb of pictures
     errorloading=0;
