@@ -989,7 +989,18 @@ for whichTime=timeList %over times
         center=[round(handles.counts{handles.i,1}(whichCol,2)),round(handles.counts{handles.i,1}(whichCol,1))]; %contains the centers of colonies
         Zonesize=handles.Zonesize;
         Zone=round(handles.counts{handles.i,2}(whichCol)*Zonesize); %the analyzed zone is Zonesize fold bigger than the last radii
-        rgbcol=rgb(center(1)-Zone:center(1)+Zone,center(2)-Zone:center(2)+Zone,:); %for ploting purposes
+        if center(1)-Zone<0 || center(1)+Zone>size(rgb,1) || center(2)-Zone<0 || center(2)+Zone >size(rgb,2)%the colony is two close from the border
+
+            if errColBorder==0
+
+            disp('one or more colonies was too close to border of the image, it was ignored')
+
+            errColBorder=errColBorder+1;
+
+            end
+
+        else
+rgbcol=rgb(center(1)-Zone:center(1)+Zone,center(2)-Zone:center(2)+Zone,:); %for ploting purposes
         rgbcolG=rgb(center(1)-Zone:center(1)+Zone,center(2)-Zone:center(2)+Zone,2); %picking up subpart of the image for further analysis
         M=double(rgbcolG);   %convert to double for calculation 
         
@@ -1088,7 +1099,7 @@ for whichTime=timeList %over times
             plot([RadMean(whichCol,whichTime) RadMean(whichCol,whichTime)],[0 max(Zinterp(:))],'r','linewidth',3); hold off;
             pause (2)
         end
-        
+     end % if a colony is too close from the border....   
     end %over all colonies
     text=([num2str(floor(100*(1-((whichTime-deltaT)/length(timeList))))),'% done, est. ' num2str(ceil(toc/(1-((whichTime-deltaT)/length(timeList)))*((whichTime-deltaT)/length(timeList))/60)), ' min remaining']);
     set(handles.timeRemain, 'String', text); 
