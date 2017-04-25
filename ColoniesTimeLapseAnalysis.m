@@ -126,6 +126,7 @@ handles.rgbAVG=[];
 handles.numImgAVG = 30;
 handles.centersDust = [];
 handles.radiiDust = [];
+handles.OnlyCenterTick=0;
 
 handles.apR=1; %appearing radius for cells
 set(handles.NumCells, 'String', 0);
@@ -241,7 +242,7 @@ function next_Callback(hObject, eventdata, handles)
 % hObject    handle to next (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-% a=handles.i; %the variable was not used
+% a=handles.i;
 if handles.i<length(handles.l)
     handles.counts{handles.i,1}=handles.centers;
     handles.counts{handles.i,2}=handles.radii;
@@ -326,18 +327,26 @@ end
 handles.centersBack=handles.centers; %saving for undo purpose
 handles.radiiBack=handles.radii; %saving for undo purpose
 
-% instructions to users
-set(handles.UserMess, 'String', 'click on image for new cells, then press enter');
+if handles.OnlyCenterTick %this means user is only interreted in centers
+    set(handles.UserMess, 'String', 'click on image for new circle center(s), press retur key ');
+    [X1, Y1] = ginput;
+    X1=X1; Y1=Y1;
+    r=ones(length(X1),1); %the radius is selected to be 1
+    
+else %in the case where user wants to use radius values
+    % instructions to users
+    set(handles.UserMess, 'String', 'click on image for a new colony, drag to radius, then click again');
 
-%get colony center
-[X1, Y1] = ginput(1);
-hold on;
-h = plot(X1, Y1, 'r');
-%get radius from a sencon click
-set(gcf, 'WindowButtonMotionFcn', {@mousemove, h, [X1 Y1]}); %to have an updating circle
-k = waitforbuttonpress; %#ok<NASGU>
-set(gcf, 'WindowButtonMotionFcn', ''); %unlock the graph
-r = norm([h.XData(1) - X1 h.YData(2) - Y1]); %circle coordinates are in h object
+    %get colony center
+    [X1, Y1] = ginput(1);
+    hold on;
+    h = plot(X1, Y1, 'r');
+    %get radius from a sencon click
+    set(gcf, 'WindowButtonMotionFcn', {@mousemove, h, [X1 Y1]}); %to have an updating circle
+    k = waitforbuttonpress; %#ok<NASGU>
+    set(gcf, 'WindowButtonMotionFcn', ''); %unlock the graph
+    r = norm([h.XData(1) - X1 h.YData(2) - Y1]); %circle coordinates are in h object
+end
 
 %add cells
 if size(handles.centers,1)>=1 %add to existing list
@@ -989,7 +998,7 @@ for whichTime=timeList %over times
         center=[round(handles.counts{handles.i,1}(whichCol,2)),round(handles.counts{handles.i,1}(whichCol,1))]; %contains the centers of colonies
         Zonesize=handles.Zonesize;
         Zone=round(handles.counts{handles.i,2}(whichCol)*Zonesize); %the analyzed zone is Zonesize fold bigger than the last radii
-        if center(1)-Zone<0 || center(1)+Zone>size(rgb,1) || center(2)-Zone<0 || center(2)+Zone >size(rgb,2)%the colony is two close from the border
+ if center(1)-Zone<0 || center(1)+Zone>size(rgb,1) || center(2)-Zone<0 || center(2)+Zone >size(rgb,2)%the colony is two close from the border
 
             if errColBorder==0
 
@@ -999,8 +1008,8 @@ for whichTime=timeList %over times
 
             end
 
-        else
-rgbcol=rgb(center(1)-Zone:center(1)+Zone,center(2)-Zone:center(2)+Zone,:); %for ploting purposes
+ else
+        rgbcol=rgb(center(1)-Zone:center(1)+Zone,center(2)-Zone:center(2)+Zone,:); %for ploting purposes
         rgbcolG=rgb(center(1)-Zone:center(1)+Zone,center(2)-Zone:center(2)+Zone,2); %picking up subpart of the image for further analysis
         M=double(rgbcolG);   %convert to double for calculation 
         
@@ -1099,7 +1108,7 @@ rgbcol=rgb(center(1)-Zone:center(1)+Zone,center(2)-Zone:center(2)+Zone,:); %for 
             plot([RadMean(whichCol,whichTime) RadMean(whichCol,whichTime)],[0 max(Zinterp(:))],'r','linewidth',3); hold off;
             pause (2)
         end
-     end % if a colony is too close from the border....   
+ end % if a colony is too close from the border....   
     end %over all colonies
     text=([num2str(floor(100*(1-((whichTime-deltaT)/length(timeList))))),'% done, est. ' num2str(ceil(toc/(1-((whichTime-deltaT)/length(timeList)))*((whichTime-deltaT)/length(timeList))/60)), ' min remaining']);
     set(handles.timeRemain, 'String', text); 
@@ -1504,7 +1513,11 @@ end
 handles.im=imshow(handles.rgb,'InitialMagnification', 25);
 
 if ~isempty(handles.counts{handles.i,1})
-    viscircles(handles.counts{handles.i,1},handles.counts{handles.i,2}*handles.apR); %ploting with small diameter to enhance visualisation
+    if handles.OnlyCenterTick %this mean 'only centers' tick is activated
+        viscircles(handles.counts{handles.i,1},ones(size(handles.counts{handles.i,2}))*10*handles.apR,'Color', 'b'); %ploting with a 10x diameter to enhance visualisation
+    else
+        viscircles(handles.counts{handles.i,1},handles.counts{handles.i,2}*handles.apR, 'Color', 'b'); %ploting with actual diameter x user factor
+    end
 end
 
 set(handles.NumCells, 'String', num2str(size(handles.counts{handles.i,2},1)));
@@ -1676,6 +1689,11 @@ function AddOnlyCenters_Callback(hObject, eventdata, handles) % --- Executes on 
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 % Hint: get(hObject,'Value') returns toggle state of AddOnlyCenters
+
+handles.OnlyCenterTick=get(hObject,'Value'); %getting value
+guidata(hObject,handles) %refreshing object
+
+
 end
 function Showdust_Callback(hObject, eventdata, handles) % --- Executes on button press in Showdust.
 % hObject    handle to Showdust (see GCBO)
