@@ -241,7 +241,7 @@ function next_Callback(hObject, eventdata, handles)
 % hObject    handle to next (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-a=handles.i;
+% a=handles.i; %the variable was not used
 if handles.i<length(handles.l)
     handles.counts{handles.i,1}=handles.centers;
     handles.counts{handles.i,2}=handles.radii;
