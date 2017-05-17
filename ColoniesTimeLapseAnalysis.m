@@ -173,6 +173,13 @@ function errorloading=chngDir(figure1, directory, handles) %will return 1 if loa
 %getting file list
 errorloading=1;
 handles.l=dir([directory, '/', '*',handles.filextension]); %lists all files with filextension
+
+%removing the possible hidden files or subfolders. They start with "."
+for h=1:size(handles.l,1)
+    keep(h)=(handles.l(h).name(1)~='.');
+end
+handles.l=handles.l(keep);
+
 if isempty(handles.l)
     errordlg(['Did not find any ' handles.filextension ' images in folder' directory '. If you are working with other images types, please consider editing handles.filextension.'],'Error');
     errorloading=0;
