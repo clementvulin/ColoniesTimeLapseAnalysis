@@ -35,7 +35,7 @@ function varargout = ColoniesTimeLapseAnalysis(varargin)
 
 % Edit the above text to modify the response to help ColoniesTimeLapseAnalysis
 
-% Last Modified by GUIDE v2.5 15-Jan-2017 15:40:22
+% Last Modified by GUIDE v2.5 26-May-2017 16:07:27
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -114,6 +114,7 @@ handles.radii = [];
 handles.centersBack = [];
 handles.radiiBack = [];
 
+
 %file and folder handling
 handles.dir='/Users/vulincle/Desktop/test_timeLapse/jpg';
 handles.i = 1; %frame number
@@ -126,6 +127,10 @@ handles.numImgAVG = 30;
 handles.centersDust = [];
 handles.radiiDust = [];
 handles.OnlyCenterTick=0;
+handles.DelimitBorders=[]; %array which will contain the coordinates of the  x- and y-coordinates of the 3 points->[3x2]chosen by the user to fit the circular area taken into account for analysis
+handles.DelimitBordersBack=[];
+handles.AAc=[];%will contain the  x- and y-coordinates of the C of the fitted circular analysis area (AA) taken into account for analysis
+handles.AAr=0;%will contain the r of the fitted circular analysis area (AA)taken into account for analysis
 
 handles.apR=1; %appearing radius for cells
 set(handles.NumCells, 'String', 0);
@@ -161,7 +166,7 @@ function chngdir_Callback(hObject, eventdata, handles)
 %ask user for dir
 handles.dir=uigetdir(handles.dir,'please select the directory with the files to correct');
 
-if handles.dir==0; return; end; %user cancelled
+if handles.dir==0; return; end %user cancelled
 set(handles.currentdir, 'String', handles.dir);
 guidata(handles.figure1, handles);
 chngDir(handles.figure1, handles.dir,handles);
@@ -171,6 +176,12 @@ function errorloading=chngDir(figure1, directory, handles) %will return 1 if loa
 %getting file list
 errorloading=1;
 handles.l=dir([directory, '/', '*',handles.filextension]); %lists all files with filextension
+%removing the possible hidden files or subfolders. They start with "."
+ for h=1:size(handles.l,1)
+     keep(h)=(handles.l(h).name(1)~='.');
+ end
+ handles.l=handles.l(keep);
+
 if isempty(handles.l)
     errordlg(['Did not find any ' handles.filextension ' images in folder' directory '. If you are working with other images types, please consider editing handles.filextension.'],'Error');
     errorloading=0;
@@ -184,11 +195,13 @@ if ~isempty(dir([directory, '/', '*','all','*'])) %found a file countaing "all"
     fileAll=load([directory,'/',files(end).name]); %this contains, counts, i, Rad, RadMean, dir, minRad, maxRad and sensitivity
     handles.counts=fileAll.counts;
     handles.oldi=fileAll.i;
-    handles.Rad=fileAll.Rad;
+    %handles.Rad=fileAll.Rad;
     handles.RadMean=fileAll.RadMean;
     handles.minRad=fileAll.minRad;
     handles.maxRad=fileAll.maxRad;
     handles.sensitivity=fileAll.sensitivity;
+    handles.AAc=fileAll.AAc;
+    handles.AAr=fileAll.AAr;
     catch
         disp('did not find all files');
         handles.counts=cell(length(handles.l),2); %creating empty cell with the nb of pictures
@@ -211,8 +224,6 @@ else %nothing found
     errorloading=0;
     handles.i=1;
 end
-
-%handles.rgb = imread([handles.dir, '/',handles.l(handles.i).name]); %load pic
 
 % Update handles structure
 guidata(figure1, handles);
@@ -301,11 +312,10 @@ end % --- Executes on button press in setNum.
 %% modify images
 function AddCells_Callback(hObject, eventdata, handles)
 
-if sum(size(handles.l))==0; %the list doesn't exist
+if sum(size(handles.l))==0 %the list doesn't exist
     errordlg('please load a image series')
     return
 end
-
 
 handles.centersBack=handles.centers; %saving for undo purpose
 handles.radiiBack=handles.radii; %saving for undo purpose
@@ -313,7 +323,6 @@ handles.radiiBack=handles.radii; %saving for undo purpose
 if handles.OnlyCenterTick %this means user is only interreted in centers
     set(handles.UserMess, 'String', 'click on image for new circle center(s), press retur key ');
     [X1, Y1] = ginput;
-    %X1=X1; Y1=Y1;
     r=ones(length(X1),1); %the radius is selected to be 1
     
 else %in the case where user wants to use radius values
@@ -330,7 +339,6 @@ else %in the case where user wants to use radius values
     set(gcf, 'WindowButtonMotionFcn', ''); %unlock the graph
     r = norm([h.XData(1) - X1 h.YData(2) - Y1]); %circle coordinates are in h object
 end
-
 
 %add cells
 if size(handles.centers,1)>=1 %add to existing list
@@ -507,7 +515,90 @@ guidata(hObject, handles);
 %refresh Graph
 refresh(handles,1);
 end
-
+function DelimitArea_Callback(hObject, eventdata, handles)
+% hObject    handle to FindColonies (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+if sum(size(handles.l))==0 %the list doesn't exist
+    errordlg('please load a image series')
+    return
+end
+handles.DelimitBordersBack=handles.DelimitBorders;
+% instructions to users
+set(handles.UserMess, 'String', 'Select three non-colinear points to delimit the petri dish surface');
+%get points
+[X, Y] = ginput(3);
+hold on;
+plot(X,Y,'*b');
+handles.DelimitBorders=[X,Y];
+[R,xcyc] =fit_circle_through_3_points(handles.DelimitBorders);
+plot(xcyc(1),xcyc(2),'*b');
+C=[xcyc(1),xcyc(2)];
+viscircles(C,R, 'Color','b');
+handles.AAc=C;
+handles.AAr=R;
+guidata(hObject,handles)
+saveall(handles);
+end
+function [R,xcyc] = fit_circle_through_3_points(ABC)
+    % FIT_CIRCLE_THROUGH_3_POINTS
+    % Mathematical background is provided in http://www.regentsprep.org/regents/math/geometry/gcg6/RCir.htm
+    %
+    % Input:
+    %
+    %   ABC is a [3 x 2n] array. Each two columns represent a set of three points which lie on
+    %       a circle. Example: [-1 2;2 5;1 1] represents the set of points (-1,2), (2,5) and (1,1) in Cartesian
+    %       (x,y) coordinates.
+    %
+    % Outputs:
+    %
+    %   R     is a [1 x n] array of circle radii corresponding to each set of three points.
+    %   xcyc  is an [2 x n] array of of the centers of the circles, where each column is [xc_i;yc_i] where i
+    %         corresponds to the {A,B,C} set of points in the block [3 x 2i-1:2i] of ABC
+    %
+    % Author: Danylo Malyuta.
+    % Version: v1.0 (June 2016)
+    % ----------------------------------------------------------------------------------------------------------
+    % Each set of points {A,B,C} lies on a circle. Question: what is the circles radius and center?
+    % A: point with coordinates (x1,y1)
+    % B: point with coordinates (x2,y2)
+    % C: point with coordinates (x3,y3)
+    % ============= Find the slopes of the chord A<-->B (mr) and of the chord B<-->C (mt)
+    %   mt = (y3-y2)/(x3-x2)
+    %   mr = (y2-y1)/(x2-x1)
+    % /// Begin by generalizing xi and yi to arrays of individual xi and yi for each {A,B,C} set of points provided in ABC array
+    x1 = ABC(1,1:2:end);
+    x2 = ABC(2,1:2:end);
+    x3 = ABC(3,1:2:end);
+    y1 = ABC(1,2:2:end);
+    y2 = ABC(2,2:2:end);
+    y3 = ABC(3,2:2:end);
+    % /// Now carry out operations as usual, using array operations
+    mr = (y2-y1)./(x2-x1);
+    mt = (y3-y2)./(x3-x2);
+    % A couple of failure modes exist:
+    %   (1) First chord is vertical       ==> mr==Inf
+    %   (2) Second chord is vertical      ==> mt==Inf
+    %   (3) Points are collinear          ==> mt==mr (NB: NaN==NaN here)
+    %   (4) Two or more points coincident ==> mr==NaN || mt==NaN
+    % Resolve these failure modes case-by-case.
+    idf1 = isinf(mr); % Where failure mode (1) occurs
+    idf2 = isinf(mt); % Where failure mode (2) occurs
+    idf34 = isequaln(mr,mt) | isnan(mr) | isnan(mt); % Where failure modes (3) and (4) occur
+    % ============= Compute xc, the circle center x-coordinate
+    xcyc = (mr.*mt.*(y3-y1)+mr.*(x2+x3)-mt.*(x1+x2))./(2*(mr-mt));
+    xcyc(idf1) = (mt(idf1).*(y3(idf1)-y1(idf1))+(x2(idf1)+x3(idf1)))/2; % Failure mode (1) ==> use limit case of mr==Inf
+    xcyc(idf2) = ((x1(idf2)+x2(idf2))-mr(idf2).*(y3(idf2)-y1(idf2)))/2; % Failure mode (2) ==> use limit case of mt==Inf
+    xcyc(idf34) = NaN; % Failure mode (3) or (4) ==> cannot determine center point, return NaN
+    % ============= Compute yc, the circle center y-coordinate
+    xcyc(2,:) = -1./mr.*(xcyc-(x1+x2)/2)+(y1+y2)/2;
+    idmr0 = mr==0;
+    xcyc(2,idmr0) = -1./mt(idmr0).*(xcyc(idmr0)-(x2(idmr0)+x3(idmr0))/2)+(y2(idmr0)+y3(idmr0))/2;
+    xcyc(2,idf34) = NaN; % Failure mode (3) or (4) ==> cannot determine center point, return NaN
+    % ============= Compute the circle radius
+    R = sqrt((xcyc(1,:)-x1).^2+(xcyc(2,:)-y1).^2);
+    R(idf34) = Inf; % Failure mode (3) or (4) ==> assume circle radius infinite for this case
+end
 %% apperance on images
 function updateRad_Callback(hObject, eventdata, handles)
 % hObject    handle to updateRad (see GCBO)
@@ -640,15 +731,14 @@ guidata(hObject,handles)
 
 end
 % Push buttons
-function Recalc1_Callback(hObject, eventdata, handles) % --- Executes on button press in Recalc1, finds cicles in current image
-% hObject    handle to Recalc1 (see GCBO)
+function FindColonies_Callback(hObject, eventdata, handles)
+% hObject    handle to FindColonies (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 if sum(size(handles.l))==0 %the list doesn't exist
     errordlg('please load a image series')
     return
 end
-
 tic
 range1=[handles.minRadN handles.maxRadN];
 rgb = handles.rgb;
@@ -918,7 +1008,7 @@ dlg_title = 'Parameters for timelapse analysis (0=all, if several input separate
 defaultans = {'0','0'};
 answer = inputdlg(prompt,dlg_title,num_lines,defaultans);
 
-if isempty(answer); return; end; %user cancelled
+if isempty(answer); return; end %user cancelled
 
 %colonies
 UserColNb=str2num(answer{1,1}); %#ok<ST2NM> %user input
@@ -1009,7 +1099,7 @@ for whichTime=timeList %over times
             subplot(1,3,3); plot (Zinterp(1,:)); hold on;
             for j=2:size(Zinterp,1) %finding colony
                 plot (Zinterp(j,:));
-            end;
+            end
             hold off;
             title(['col ' num2str(whichCol) ', time ' num2str(whichTime) ]);
         end
@@ -1052,9 +1142,9 @@ for whichTime=timeList %over times
             subplot(1,3,2); hold on;
             plot(smooth(Rad{whichCol,whichTime},9),1:size(Zinterp,1), 'k', 'linewidth',2)
             subplot(1,3,1); hold on;
-            viscircles([X0,Y0],RadMean(whichCol,whichTime),'Color','r'); hold off;
+            viscircles([X0,Y0],RadMean(whichCol,whichTime),'Color','b'); hold off;
             subplot(1,3,3); hold on; 
-            plot([0 size(Zinterp,2)],[Tresh*TreshVal Tresh*TreshVal],'r','linewidth',3)
+            plot([0 size(Zinterp,2)],[Tresh*TreshVal Tresh*TreshVal],'b','linewidth',3)
             plot([RadMean(whichCol,whichTime) RadMean(whichCol,whichTime)],[0 max(Zinterp(:))],'r','linewidth',3); hold off;
             pause (2)
         end 
@@ -1454,11 +1544,19 @@ if ~isempty(handles.im) && z==1
     xlim = handles.axes1.XLim;
 end
 
-%update image
-%subplot('Position', [0 0 1 1]); %going from subplot to plot in one image
-%close;
 handles.im=imshow(handles.rgb,'InitialMagnification', 25);
-
+%[imageSizeY, imageSizeX] = size(handles.im);
+%[columnsInImage rowsInImage] = meshgrid(1:imageSizeX, 1:imageSizeY);
+if ~isempty(handles.AAc)
+       viscircles(handles.AAc,handles.AAr, 'Color','b');
+       %hold on;
+       %circlePixels = (rowsInImage - handles.AAc(2)).^2 +(columnsInImage - handles.AAc(1)).^2 <= handles.AAr.^2;
+       %set(handles.imageNumber, 'String', ['circlePixels ',num2str(circlePixels(1))]);
+       %maskedImage = handles.im; 
+       %maskedImage(circlePixels) = 0;
+       %handles.rgb= maskedImage;
+end
+    
 if ~isempty(handles.counts{handles.i,1})
     if handles.OnlyCenterTick %this mean 'only centers' tick is activated
         viscircles(handles.counts{handles.i,1},ones(size(handles.counts{handles.i,2}))*10*handles.apR,'Color', 'b'); %ploting with a 10x diameter to enhance visualisation
@@ -1477,8 +1575,6 @@ if ~isempty(xlim) && z==1
     handles.axes1.XLim=xlim;
     handles.axes1.YLim=ylim;
 end
-
-
 
 %updating user messages
 set(handles.imageNumber, 'String', ['image number ',num2str(handles.i), ' out of ', num2str(length(handles.l))]); pause(0.05);
@@ -1499,6 +1595,8 @@ dir=handles.dir;%#ok<NASGU>
 minRad=handles.minRadN;%#ok<NASGU>
 maxRad=handles.maxRadN;%#ok<NASGU>
 sensitivity=handles.sensitivityN;%#ok<NASGU>
+AAc=handles.AAc;
+AAr=handles.AAr;
 
 save([handles.dir '/sidesave.mat'],'counts') %to be place on a step by step save
 save([handles.dir '/stoped_at.mat'],'i')
@@ -1517,7 +1615,7 @@ end
 if isempty(del)
     del=strfind(handles.dir,'\'); %because windows and mac have different delimiters
 end
-save([handles.dir handles.dir(del(end-1):del(end)-1) '_all.mat'], 'counts','i','dir', 'minRad','maxRad', 'sensitivity','RadMean','Rad')
+save([handles.dir handles.dir(del(end-1):del(end)-1) '_all.mat'], 'counts','i','dir', 'minRad','maxRad', 'sensitivity','RadMean','AAc','AAr')
 
 end
 function saveall_Callback(hObject, eventdata, handles) % --- Executes on button press in saveall.
@@ -1538,6 +1636,7 @@ end
 
 handles.centers=handles.centersBack; %saving for undo purpose
 handles.radii=handles.radiiBack; %saving for undo purpose
+handles.DelimitBorders=handles.DelimitBordersBack;%saving for undo purpose
 handles.counts{handles.i,1}=handles.centers;
 handles.counts{handles.i,2}=handles.radii;
 guidata(handles.figure1, handles);
@@ -1696,7 +1795,7 @@ function zoomdezoom()
 %     assert(sum(TF)==1);
 % loc
 %     htb = htbA(loc);
-% end
+end
 function children = getAllChildren( hObject )
 % Performs  ch = get(hObject,'children') with ShowHiddenHandles == 'on'
 
@@ -1709,314 +1808,8 @@ children = get(hObject,'children');
 delete(tmp);
 
 end
-% function  onKeyPress( hObject, evnt ,handles)
-% % Process user keypress - toggle zoom/pan mode
-% %
-% %% What keys to use?
-% %
-% % * SHIFT - using it here prevents user from creating multiple datatips
-% %           (the context menu "add new datatip" is broken)
-% %
-% %     Character: ''
-% %      Modifier: {'shift'}
-% %           Key: 'shift'
-% %
-% %
-% % * ALT - sets focus to the figure's main menu, which is not a real 
-% %         problem, but looks weired
-% %
-% %     Character: ''
-% %      Modifier: {'alt'}
-% %           Key: 'alt'
-% %    
-% %
-% % * CONTROL - works OK
-% %
-% %     Character: ''
-% %      Modifier: {'control'}
-% %           Key: 'control'
-% %
-% %
-% % * 'Z' - (and other printable keys) - works, but would be printed to
-% %         the Command Window, unless this function is called via
-% %         'KeyPressFcn', which is an issue, cause it gets overwritten
-% %         on MODE change.
-% %         (see notes in "setHotkeys.m" and "updateCallbacks.m")
-% %
-% %     Character: 'z'
-% %      Modifier: {''}
-% %           Key: 'z'
-% % 
-% % 
-% % 
-% 
-% setHotkeys(hObject, handles);
-% 
-% switch evnt.Key
-%     
-%     case 'c'
-%         AddCells_Callback(hObject, eventdata, handles)
-%     case 't'
-%         ClearZone_Callback(hObject, eventdata, handles)
-%     case'o'
-%         chngdir_Callback(hObject, eventdata, handles)
-%     case 'leftarrow'
-%         previous_Callback(hObject, eventdata, handles)
-%     case 'backspace'
-%         Undo_Callback(hObject, eventdata, handles)
-%     case 'rightarrow'
-%         next_Callback(hObject, eventdata, handles)
-%     case 'r'
-%         RemoveCol_Callback(hObject, eventdata, handles)
-%     case 'x'    
-%         mode = 'Exploration.Pan';
-%         new_state = toggle(hObject,mode);
-%         pan(hObject,new_state)
-%     case 'z'
-%         mode = 'Exploration.ZoomIn';
-%         new_state = toggle(hObject,mode);
-%         zoom(hObject,new_state);   
-%     otherwise            
-%         return; % ignore keypress
-%             
-% end
-% 
-% updateCallbacks( hObject, mode );
-% 
-% 
-% end
-% function new_state = toggle(hObject,tag)    
-% 
-%     htb = findToolbarButton(hObject,tag)
-%     
-%     switch htb.State
-%         
-%         case 'on'
-%             new_state = 'off';
-%             
-%         case 'off'
-%             new_state = 'on';
-%             
-%         otherwise
-%             error('figkeys:onKeyPress:unexpectedState',...
-%                   'Unexpected button state');              
-%               
-%     end
-%     
-%     
-% end
-% function onMouseWheel( hObject, eventdata, handles )
-% %A special
-% 
-% %htb3 = findToolbarButton(hObject,'Exploration.Pan');
-% 
-% factor = exp(-0.15*eventdata.VerticalScrollCount);
-% zoom(hObject,factor)
-% 
-% end
-% function  setHotkeys( hObject,handles)
-% % Set zoom/pan hotkeys for the desired figure.
-% %
-% %% HOTKEYS:
-% %
-% % * 'z' - toogles zoom mode ( last used of zoom-in and zoom-out - assumes
-% %         that mouse wheel is used to change the zoom level )
-% % 
-% % * 'x' - toggles pan mode. Also adds zooming-with-mouse-wheel.
-% % 
-% % * 'c' - toggles rotation mode
-% %
-% % * 'v' - toggles datacursor mode
-% %
-% %% USAGE EXAMPLE:
-% %
-% % hfig = figure;
-% % imshow('peppers.png');
-% % figkeys.setHotkeys(hfig);
-% % 
-% %
-% %% INPUT
-% %   hfig - figure handle. Defaults to gcf() if ommited.
-% % 
-% % see also: test_on_imshow
-% 
-% 
-% if ~exist('hfig','var'); hObject =gcf;end;
-% 
-% %% v1 
-% % updateCallbacks(hObject);
-% % wrapToolbarButtonCallbacks(hObject);
-% 
-% %% v2 (currently disabled)
-% % (1) Same as for v1 (see "updateCallbacks.m")
-% %
-% % (2) If MODE is not toggeled, keypresses are still printed.
-% %     Try commening out "zoom(hobj,new_state) and "pan(hobj,new_state)".
-% %
-% % (3) This callback does not get overwritten when the MODE is toggeled.
-% %     That's why it's best for now.
-% 
-%  addlistener(hObject,...
-%             'WindowKeyPress',@(hObject,evnt) figure1_WindowKeyPressFcn(hObject,evnt,handles));
-% 
-% 
-% 
-% end
-% function  updateCallbacks( hObject, mode )
-% % Callback-based key-capturing method. Implemented as a standalone
-% % function, separately from "setHotkeys.m" to simplify the process of
-% % switching back to "v2", if needed:
-% %
-% % * Comment out "v1" part in "setHotkeys.m" and all code inside this
-% %   function. The function itself is still being executed.
-% 
-% %% A common part for v1.*
-% %
-% % refs:
-% % http://undocumentedmatlab.com/blog/enabling-user-callbacks-during-zoom-pan
-% % http://www.mathworks.com/matlabcentral/answers/51680-datacursormode-overwrites-keypressfcn-by-setting-in-protective-listeners-how-can-i-automatically-s
-% % http://www.mathworks.com/matlabcentral/answers/221613-how-to-keep-the-zoom-active-as-long-as-a-key-is-pressed
-% % http://www.mathworks.com/matlabcentral/newsreader/view_thread/141886
-% % http://www.mathworks.com/matlabcentral/answers/109242-how-can-i-set-a-gui-callback-such-that-it-uses-the-up-to-date-handles-structure-as-an-input-variable
-% % http://www.mathworks.com/matlabcentral/answers/251339-re-enable-keypress-capture-in-pan-or-zoom-mode
-% %
-% 
-% 
-% % The workaround, to handle both HG1 and HG2:
-% %
-% hManager = uigetmodemanager(hObject);
-% try
-%     set(hManager.WindowListenerHandles, 'Enable', 'off');  % HG1
-% catch
-%    [hManager.WindowListenerHandles.Enabled] = deal(false);  % HG2
-% end
-% 
-% 
-% 
-% %% v1.1 WindowKeyPressFcn
-% %
-% %  set(hfig,'WindowKeyPressFcn',@(hobj,evnt) figure1_WindowKeyPressFcn(hobj, evnt));
-% %
-% % (1) Works only on the first key press, because the key is printed into
-% %     the Command Window -> current figure looses focus -> next keypress is
-% %     not captured. Cliking on the figure brings focus back, and re-enables
-% %     the functionality, but this is not very user-friendly, just like
-% %     printing keypresses to the Command Window. 
-% % 
-% % (2) A possible workaround for (1) is to use non-printable keys, like
-% %     SHIFT, ALT, CTRL. This is associated with other issues though 
-% %     (see "figkeys.onKeyPress")
-% %
-% % (3) If MODE is not toggeled, keypresses are not printed (why???)
-% %     Try commening out "zoom(hobj,new_state) and "pan(hobj,new_state)".
-% %
-% % (4) This callback get overwritten each time the MODE is toggeled, thus:
-% %   
-% %     i. Requires setHotkeys() at the end of onKeyPress()
-% %
-% %    ii. Requires some additional mechanism to call setHotkeys() if MODE is
-% %        toggled from another place. E.g. if user changed mode with a
-% %        toolbar button. Change toolbar button callbacks?
-% % 
-% 
-% %% v1.2 KeyPressFcn
-% set(hObject, 'WindowKeyPressFcn', []);
-% set(hObject, 'KeyPressFcn', @(hobj,evnt) onKeyPress(hobj, evnt,handles));
-% 
-% % (1) "KeyPressFcn" intercepts keypresses and they are not printed to the
-% %    command window. Still, it might be overwritten.
-% % 
-% % (2) Enabling both "WindowKeyPressFcn" and "KeyPressFcn" results in double
-% %     toggle: on -> off -> on. (Looks reasonable).
-% %
-% % (3) is similar to (4) in v1.1
-% % 
-% 
-% %% Change the behaviour for specific modes:
-% 
-% if exist('mode','var')
-%     htb=findToolbarButton(hObject,mode);
-%     state = htb.State;
-% else
-%     state = 'off';
-% end
-% 
-% 
-% switch state
-%     case 'off'
-%         modeState = '';        
-%     case 'on'
-%         modeState = mode;
-%     otherwise
-%         error('figkeys:UnexpecteedNewState','unexpected state');
-% end
-%         
-% 
-% switch modeState
-%     
-%     case ''
-%         % normal mode, no buttons pressed, nothing
-%     
-%     case {'Exploration.ZoomIn','Exploration.ZoomOut',...
-%           'Exploration.Rotate',...
-%           'Exploration.DataCursor',...
-%           'Exploration.Brushing'...
-%           }
-%         % nothing
-%         
-%     case 'Exploration.Pan'
-%         % Make zooming with the mouse wheel availible in the "pan" mode as
-%         % well        
-%         set(hObject, 'WindowScrollWheelFcn',....
-%                            @(hobj,evnt) onMouseWheel(hobj,evnt)  );
-%                        
-%                          
-%         
-%     otherwise
-%         erorr('figkeys:UnexpecteedNewMode','unexpected new "mode"');
-% end
-%   
-% 
-% end
-% function  wrapToolbarButtonCallbacks( hObject )
-% % Wrap toolbar button callbacks, so they would fix the point (4.ii),
-% % described in "updateCallbacks.m".
-% % 
-% % We manually check and modify each callback one-by-one, to reduce the
-% % chance to get unexpected result in non-tested Matlab versions.
-% % 
-% % Currently tested in:
-% % * R2015a
-% % * R2016a
-% %
-% 
-% mode = 'Exploration.ZoomIn';
-% htb1 = findToolbarButton(hObject,mode);
-% assert(isequal(htb1.ClickedCallback,'putdowntext(''zoomin'',gcbo)'));
-% htb1.ClickedCallback = ...
-%     @(varargin) fkWrapper(hObject,'zoomin',mode);
-% 
-% 
-% mode = 'Exploration.ZoomOut';
-% htb2 = findToolbarButton(hObject,mode);
-% assert(isequal(htb2.ClickedCallback,'putdowntext(''zoomout'',gcbo)'));
-% htb2.ClickedCallback = ...
-%     @(varargin) fkWrapper(hObject,'zoomout',mode);
-% 
-% 
-% mode = 'Exploration.Pan';
-% htb3 = findToolbarButton(hObject,mode);
-% assert(isequal(htb3.ClickedCallback,'putdowntext(''pan'',gcbo)'));
-% htb3.ClickedCallback = ...
-%     @(varargin) fkWrapper(hObject,'pan',mode);
-% 
-% end
-% function fkWrapper(hObject,passedArg,mode)
-% % Evaluate built-in matlab callback, and restore overwritten custom
-% % callbacks.
-% 
-%     putdowntext(passedArg,gcbo);
-%     updateCallbacks(hObject,mode);
-%     
-% end
-end
+
+
+
+
+
