@@ -35,7 +35,7 @@ function varargout = ColoniesTimeLapseAnalysis(varargin)
 
 % Edit the above text to modify the response to help ColoniesTimeLapseAnalysis
 
-% Last Modified by GUIDE v2.5 26-May-2017 16:07:27
+% Last Modified by GUIDE v2.5 30-May-2017 11:47:18
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -234,9 +234,6 @@ function next_Callback(hObject, eventdata, handles)
 % hObject    handle to next (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-length(handles.l)
-%a=handles.i;
-%disp(a)
 if handles.i<length(handles.l)
     handles.counts{handles.i,1}=handles.centers;
     handles.counts{handles.i,2}=handles.radii;
@@ -742,7 +739,6 @@ end
 tic
 range1=[handles.minRadN handles.maxRadN];
 rgb = handles.rgb;
-%test=handles.sauvolarange
 %find circles
 set(handles.UserMess, 'String', 'calculating threshold...');guidata(hObject, handles);pause(0.05); %pause was needed to force refresh
 rgbT=sauvola(rgb(:,:,2), handles.sauvolarange); %thresholding on the rgb image
@@ -751,89 +747,28 @@ set(handles.UserMess, 'String', 'searching for colonies...');guidata(hObject, ha
     'ObjectPolarity','bright', 'Sensitivity',handles.sensitivityN, 'Method', 'Twostage');
 handles.counts{handles.i,1}=handles.centers;
 handles.counts{handles.i,2}=handles.radii;
-
-guidata(hObject, handles);
-set(handles.UserMess, 'String', ['recalculated for image' num2str(handles.i)]);
+set(handles.UserMess, 'String', ['recalculated for image' num2str(handles.i)]);guidata(hObject, handles);
 refresh(handles,0);
+guidata(hObject,handles);
 set(handles.timeRemain, 'String', ['took ',num2str(floor(toc)),' seconds for 1 frame']);
 end
-function AnalyseAllImages_Callback(hObject, eventdata, handles) % --- Executes on button press in AnalyseAllImages.
-% hObject    handle to AnalyseAllImages (see GCBO)
+function FindColoniesAll_Callback(hObject, eventdata, handles) % --- Executes on button press in AnalyseAllImages.
+% hObject    handle to FindColoniesAll (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-tic
-    rgb = handles.rgb;
-    range1=[handles.minRadN handles.maxRadN];
-    set(handles.UserMess, 'String', 'calculating threshold...');guidata(hObject, handles);pause(0.05); %pause was needed to force refresh
-        rgbT=sauvola(rgb(:,:,2), handles.sauvolarange); %thresholding on the rgb image
-        set(handles.UserMess, 'String', 'searching for colonies...');guidata(hObject, handles);pause(0.05); %pause was needed to force refresh
-        [handles.centers,handles.radii]= imfindcircles(rgbT,range1,...
-            'ObjectPolarity','bright', 'Sensitivity',handles.sensitivityN, 'Method', 'TwoStage');
-        handles.counts{handles.i,1}=handles.centers; 
-        handles.counts{handles.i,2}=handles.radii;
+handles.i=1;
+refresh(handles,0);
+FindColonies_Callback(hObject, eventdata, handles);
 
-        guidata(hObject, handles);
-        set(handles.UserMess, 'String', ['recalculated for image' num2str(handles.i)]);
-    istart=handles.i;
-    while handles.i<length(handles.l) %going for all the next slides
-        
-        handles.i=handles.i+1;
-        guidata(hObject, handles);
-        refresh(handles,0);
-        range1=[handles.minRadN handles.maxRadN];
-        handles.rgb = imread([handles.dir, '/',handles.l(handles.i).name]); %load pic
-        rgb = handles.rgb;
-        
-        %find circles
-        set(handles.UserMess, 'String', 'calculating threshold...');guidata(hObject, handles);pause(0.05); %pause was needed to force refresh
-        rgbT=sauvola(rgb(:,:,2), handles.sauvolarange); %thresholding on the rgb image
-        set(handles.UserMess, 'String', 'searching for colonies...');guidata(hObject, handles);pause(0.05); %pause was needed to force refresh
-        [handles.centers,handles.radii]= imfindcircles(rgbT,range1,...
-            'ObjectPolarity','bright', 'Sensitivity',handles.sensitivityN, 'Method', 'TwoStage');
-        handles.counts{handles.i,1}=handles.centers; 
-        handles.counts{handles.i,2}=handles.radii;
-
-        guidata(hObject, handles);
-        set(handles.UserMess, 'String', ['recalculated for image' num2str(handles.i)]);
-        %refresh function has trouble updating the handle. reproducing it here
-            handles.rgb = imread([handles.dir, '/',handles.l(handles.i).name]); %load pic
-            hold off;
-            imshow(handles.rgb,'InitialMagnification', 25)
-
-            %showing circles (if handles.counts{handles.i,1} exists)
-            if handles.i<=size(handles.counts,1)
-                if ~isempty(handles.counts{handles.i,1})
-                    viscircles(handles.counts{handles.i,1},handles.counts{handles.i,2}*handles.apR); %ploting with small diameter to enhance visualisation
-                end
-                set(handles.NumCells, 'String', num2str(size(handles.counts{handles.i,2},1)));
-                if isempty(handles.centers)
-                    handles.centers=handles.counts{handles.i,1};
-                    handles.radii=handles.counts{handles.i,2}; %splitting in two variables
-                end
-            else 
-                handles.centers=[];
-                handles.radii=[]; %splitting in two variables
-            end
-            %updating user messages
-            set(handles.imageNumber, 'String', ['image number ',num2str(handles.i), ' out of ', num2str(length(handles.l))]); pause(0.05);
-            guidata(hObject, handles);
-            saveall(handles);
-
-        %message to user
-        timeElapsed=floor(toc);
-        percDone=(handles.i-istart+1)/(length(handles.l)-istart+1)*100;
-        remT=floor((1-percDone/100)*timeElapsed/percDone*100);
-        if remT<120
-            mess=[num2str(remT),' s'];
-        else
-            mess=[num2str(remT/60),' min'];
-        end
-        set(handles.timeRemain, 'String', {[num2str(percDone), '% done']; ['Est. ',mess, ' remain' ]});
-    end
-
-
+while handles.i<length(handles.l)
+    handles.i=handles.i+1;
+    refresh(handles,0);
+    FindColonies_Callback(hObject, eventdata, handles);
 end
 
+end
+   
+  
 %functions for image analysis
 function output=sauvola(image, varargin)
 
@@ -964,8 +899,8 @@ if ~mod(n,2)
 end
 
 if (ndims(image)~=2)            % check for color pictures
-    display('The input image must be a two dimensional array.')
-    display('Consider using rgb2gray or similar function.')
+    disp('The input image must be a two dimensional array.')
+    disp('Consider using rgb2gray or similar function.')
     return
 end
 
@@ -995,7 +930,7 @@ image = cast(imageI, class(image));
 end % threshold function, downloaded from Matlab forum
 
 %% timelapse analysis
-function RecalcNext_Callback(hObject, eventdata, handles) % --- Executes on button press in RecalcNext.
+function TimeCurves_Callback(hObject, eventdata, handles) % --- Executes on button press in RecalcNext.
 % the computer will calculate the growth curves assuming the pictures folder is an ordered timelapse movie.
 if sum(size(handles.l))==0 %the list doesn't exist
     errordlg('please load a image series')
@@ -1533,7 +1468,6 @@ end
 function refresh(handles, z)
 %this function could be optimized by updating the image only if it has
 %changed... need to separate graph and image for this
-
 % if z=1, zoom is kept
 handles.rgb = imread([handles.dir, '/',handles.l(handles.i).name]); %loading pic
 hold off;
@@ -1545,18 +1479,19 @@ if ~isempty(handles.im) && z==1
 end
 
 handles.im=imshow(handles.rgb,'InitialMagnification', 25);
-%[imageSizeY, imageSizeX] = size(handles.im);
-%[columnsInImage rowsInImage] = meshgrid(1:imageSizeX, 1:imageSizeY);
+
 if ~isempty(handles.AAc)
        viscircles(handles.AAc,handles.AAr, 'Color','b');
-       %hold on;
-       %circlePixels = (rowsInImage - handles.AAc(2)).^2 +(columnsInImage - handles.AAc(1)).^2 <= handles.AAr.^2;
-       %set(handles.imageNumber, 'String', ['circlePixels ',num2str(circlePixels(1))]);
-       %maskedImage = handles.im; 
-       %maskedImage(circlePixels) = 0;
-       %handles.rgb= maskedImage;
+       hold on;
+       originalImage=handles.rgb;
+       [rows, columns, numberOfColorBands] = size(originalImage);
+       circleImage = false(rows, columns); 
+       [x, y] = meshgrid(1:columns, 1:rows); 
+       circleImage((x - handles.AAc(1)).^2 + (y - handles.AAc(2)).^2 <= handles.AAr.^2) = true; 
+       handles.rgb = bsxfun(@times, originalImage, cast(circleImage,class(originalImage)));
 end
-    
+handles.im=imshow(handles.rgb,'InitialMagnification', 25);
+
 if ~isempty(handles.counts{handles.i,1})
     if handles.OnlyCenterTick %this mean 'only centers' tick is activated
         viscircles(handles.counts{handles.i,1},ones(size(handles.counts{handles.i,2}))*10*handles.apR,'Color', 'b'); %ploting with a 10x diameter to enhance visualisation
@@ -1578,12 +1513,10 @@ end
 
 %updating user messages
 set(handles.imageNumber, 'String', ['image number ',num2str(handles.i), ' out of ', num2str(length(handles.l))]); pause(0.05);
-
 saveall(handles);
 
 % Update handles structure
 guidata(handles.figure1, handles);
-
 end
 function saveall(handles)
 %create internal variables to be saved
