@@ -131,7 +131,7 @@ handles.DelimitBorders=[]; %array which will contain the coordinates of the  x- 
 handles.DelimitBordersBack=[];
 handles.AAc=[];%will contain the  x- and y-coordinates of the C of the fitted circular analysis area (AA) taken into account for analysis
 handles.AAr=0;%will contain the r of the fitted circular analysis area (AA)taken into account for analysis
-
+handles.d=3000;%diameter of the plate in pixels, default is 30000
 handles.apR=1; %appearing radius for cells
 set(handles.NumCells, 'String', 0);
 set(handles.timeRemain, 'String', '');
@@ -1489,6 +1489,9 @@ if ~isempty(handles.AAc)
        [x, y] = meshgrid(1:columns, 1:rows); 
        circleImage((x - handles.AAc(1)).^2 + (y - handles.AAc(2)).^2 <= handles.AAr.^2) = true; 
        handles.rgb = bsxfun(@times, originalImage, cast(circleImage,class(originalImage)));
+       dist=regionprops(circleImage,'MajorAxisLength');
+       handles.d=round(dist.MajorAxisLength);
+       set(handles.UserMess, 'String', ['OK diameter =',num2str(handles.d)]);
 end
 handles.im=imshow(handles.rgb,'InitialMagnification', 25);
 
