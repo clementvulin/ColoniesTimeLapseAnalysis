@@ -1,3 +1,4 @@
+
 % to do
 % in refresh, do not reload when i is the same
 % user input filename
@@ -35,7 +36,7 @@ function varargout = ColoniesTimeLapseAnalysis(varargin)
 
 % Edit the above text to modify the response to help ColoniesTimeLapseAnalysis
 
-% Last Modified by GUIDE v2.5 30-May-2017 11:47:18
+% Last Modified by GUIDE v2.5 15-Jan-2017 15:40:22
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -114,11 +115,11 @@ handles.radii = [];
 handles.centersBack = [];
 handles.radiiBack = [];
 
-
 %file and folder handling
 handles.dir='/Users/vulincle/Desktop/test_timeLapse/jpg';
-handles.i = 1; %frame number
+handles.i = 1;
 handles.l = []; %will contain a list of files with filename
+%handles.filename='IMG_'; %typical filename before numbers
 handles.filextension='.JPG';
 
 % dust handling (not usefull for colony analysis)
@@ -127,11 +128,7 @@ handles.numImgAVG = 30;
 handles.centersDust = [];
 handles.radiiDust = [];
 handles.OnlyCenterTick=0;
-handles.DelimitBorders=[]; %array which will contain the coordinates of the  x- and y-coordinates of the 3 points->[3x2]chosen by the user to fit the circular area taken into account for analysis
-handles.DelimitBordersBack=[];
-handles.AAc=[];%will contain the  x- and y-coordinates of the C of the fitted circular analysis area (AA) taken into account for analysis
-handles.AAr=0;%will contain the r of the fitted circular analysis area (AA)taken into account for analysis
-handles.d=3000;%diameter of the plate in pixels, default is 30000
+
 handles.apR=1; %appearing radius for cells
 set(handles.NumCells, 'String', 0);
 set(handles.timeRemain, 'String', '');
@@ -140,12 +137,13 @@ set(handles.timeRemain, 'String', '');
 handles.rgb=[];
 handles.im=[];
 handles.RadMean=[];
+handles.RadMean2=[];
 handles.Rad=[];
 
 %for timelapse analysis
 handles.Zonesize=1.2;
 handles.percsizeMean=0.01;% total image area to define the zero
-handles.Tresh=1.3; %Threshold under which there is no colony (in fold of min)
+handles.Tresh=3; %Threshold under which there is no colony (in fold of min)
 handles.Numtresh=5;%number of values needed to call threshold reached
 handles.tres=128; % # of grid points for theta coordinate (change to needed binning)
 handles.showplot=0; %if true, shows the graphs of analysis in userwindow 
@@ -166,21 +164,22 @@ function chngdir_Callback(hObject, eventdata, handles)
 %ask user for dir
 handles.dir=uigetdir(handles.dir,'please select the directory with the files to correct');
 
-if handles.dir==0; return; end %user cancelled
+if handles.dir==0; return; end; %user cancelled
 set(handles.currentdir, 'String', handles.dir);
 guidata(handles.figure1, handles);
 chngDir(handles.figure1, handles.dir,handles);
-length(handles.l)
+%length(handles.l)
 end
 function errorloading=chngDir(figure1, directory, handles) %will return 1 if loading was correct
 %getting file list
 errorloading=1;
 handles.l=dir([directory, '/', '*',handles.filextension]); %lists all files with filextension
+
 %removing the possible hidden files or subfolders. They start with "."
- for h=1:size(handles.l,1)
-     keep(h)=(handles.l(h).name(1)~='.');
- end
- handles.l=handles.l(keep);
+for h=1:size(handles.l,1)
+    keep(h)=(handles.l(h).name(1)~='.');
+end
+handles.l=handles.l(keep);
 
 if isempty(handles.l)
     errordlg(['Did not find any ' handles.filextension ' images in folder' directory '. If you are working with other images types, please consider editing handles.filextension.'],'Error');
@@ -189,41 +188,58 @@ if isempty(handles.l)
 end
 
 %loading previously saved data if existant
-if ~isempty(dir([directory, '/', '*','all','*'])) %found a file countaing "all"
-    try
-    files=dir([directory, '/', '*','all','*']);
-    fileAll=load([directory,'/',files(end).name]); %this contains, counts, i, Rad, RadMean, dir, minRad, maxRad and sensitivity
-    handles.counts=fileAll.counts;
-    handles.oldi=fileAll.i;
-    %handles.Rad=fileAll.Rad;
-    handles.RadMean=fileAll.RadMean;
-    handles.minRad=fileAll.minRad;
-    handles.maxRad=fileAll.maxRad;
-    handles.sensitivity=fileAll.sensitivity;
-    handles.AAc=fileAll.AAc;
-    handles.AAr=fileAll.AAr;
-    catch
-        disp('did not find all files');
-        handles.counts=cell(length(handles.l),2); %creating empty cell with the nb of pictures
-        errorloading=0;
-        handles.i=1;
-    end
-    set(handles.UserMess, 'String', 'found previous analysis, loaded it into Matlab');
+% if ~isempty(dir([directory, '/', '*','all','*'])); %found a file countaing "all"
+%     try
+%     files=dir([directory, '/', '*','all','*']);
+%     fileAll=load([directory,'/',files(end).name]); %this contains, counts, i, Rad, RadMean, dir, minRad, maxRad and sensitivity
+%     handles.counts=fileAll.counts;
+%     handles.oldi=fileAll.i;
+%     handles.Rad=fileAll.Rad;
+%     handles.RadMean=fileAll.RadMean;
+%     handles.minRad=fileAll.minRad;
+%     handles.maxRad=fileAll.maxRad;
+%     handles.sensitivity=fileAll.sensitivity;
+%     catch
+%         disp('did not find all files');
+%         handles.counts=cell(length(handles.l),2); %creating empty cell with the nb of pictures
+%         errorloading=0;
+%         handles.i=1;
+%     end
+%     set(handles.UserMess, 'String', 'found previous analysis, loaded it into Matlab');
+% elseif 
+if size(dir([handles.dir, '/', '*','_all.mat']),1) %there is a _all.mat file
+    fileSaved=dir([handles.dir, '/', '*','_all.mat']);
+    fileload=load([handles.dir, '/', fileSaved(1).name]); %nb: here, if there are several matching files, Matlab takes the first one
+    handles.counts=fileload.counts;
+    handles.i=fileload.i;
+    handles.maxRad=fileload.maxRad;
+    handles.minRad=fileload.minRad;
+    handles.Rad=fileload.Rad;
+    handles.RadMean=fileload.RadMean;
+    handles.RadMean2=fileload.RadMean2;
+    handles.sensitivity=fileload.sensitivity;
+    
+    set(handles.UserMess, 'String', ['found ',fileSaved(1).name ,', loaded it into Matlab']);
+    
 elseif exist ([handles.dir '/sidesave.mat'], 'file')&& exist ([handles.dir '/stoped_at.mat'], 'file') %check for an older saved analysis
     handles.countsload=load([handles.dir '/sidesave.mat']); %this file was produced when saving
     handles.oldiload=load([handles.dir '/stoped_at.mat']); %this file was produced when saving
     handles.counts=handles.countsload.counts; %because load gives a struct object
     handles.oldi=handles.oldiload.i;
     set(handles.UserMess, 'String', 'found previous analysis, loaded it into Matlab');
+
 elseif exist([handles.dir '/counts.mat'], 'file')
     handles.countsload=load ([handles.dir '/counts.mat']); %this file was produced when analysing
     handles.counts=handles.countsload.counts; %because load gives a struct object
     handles.oldi=1; %start from the start!
+    
 else %nothing found
     handles.counts=cell(length(handles.l),2); %creating empty cell with the nb of pictures
     errorloading=0;
     handles.i=1;
 end
+
+%handles.rgb = imread([handles.dir, '/',handles.l(handles.i).name]); %load pic
 
 % Update handles structure
 guidata(figure1, handles);
@@ -234,6 +250,7 @@ function next_Callback(hObject, eventdata, handles)
 % hObject    handle to next (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+% a=handles.i;
 if handles.i<length(handles.l)
     handles.counts{handles.i,1}=handles.centers;
     handles.counts{handles.i,2}=handles.radii;
@@ -296,7 +313,7 @@ function setNum_Callback(hObject, eventdata, handles) %#ok<*INUSL>
 
 %initialize_gui(gcbf, handles, true);
 
-if sum(size(handles.l))==0 %the list doesn't exist
+if sum(size(handles.l))==0; %the list doesn't exist
     errordlg('please load a image series')
     return
 end
@@ -309,10 +326,11 @@ end % --- Executes on button press in setNum.
 %% modify images
 function AddCells_Callback(hObject, eventdata, handles)
 
-if sum(size(handles.l))==0 %the list doesn't exist
+if sum(size(handles.l))==0; %the list doesn't exist
     errordlg('please load a image series')
     return
 end
+
 
 handles.centersBack=handles.centers; %saving for undo purpose
 handles.radiiBack=handles.radii; %saving for undo purpose
@@ -320,6 +338,7 @@ handles.radiiBack=handles.radii; %saving for undo purpose
 if handles.OnlyCenterTick %this means user is only interreted in centers
     set(handles.UserMess, 'String', 'click on image for new circle center(s), press retur key ');
     [X1, Y1] = ginput;
+    X1=X1; Y1=Y1;
     r=ones(length(X1),1); %the radius is selected to be 1
     
 else %in the case where user wants to use radius values
@@ -370,7 +389,7 @@ function ClearZone_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
-if sum(size(handles.l))==0 %the list doesn't exist
+if sum(size(handles.l))==0; %the list doesn't exist
     errordlg('please load a image series')
     return
 end
@@ -397,7 +416,7 @@ function ClearRecZone_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
-if sum(size(handles.l))==0 %the list doesn't exist
+if sum(size(handles.l))==0; %the list doesn't exist
     errordlg('please load a image series')
     return
 end
@@ -423,7 +442,7 @@ function AddDust_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
-if sum(size(handles.l))==0 %the list doesn't exist
+if sum(size(handles.l))==0; %the list doesn't exist
     errordlg('please load a image series')
     return
 end
@@ -481,7 +500,7 @@ refresh(handles);
 end %obsolete here % --- Executes on button press in AddDust.
 function RemoveCol_Callback(hObject, eventdata, handles) % --- Executes on button press in RemoveCol.
 
-if sum(size(handles.l))==0 %the list doesn't exist
+if sum(size(handles.l))==0; %the list doesn't exist
     errordlg('please load a image series')
     return
 end
@@ -512,97 +531,14 @@ guidata(hObject, handles);
 %refresh Graph
 refresh(handles,1);
 end
-function DelimitArea_Callback(hObject, eventdata, handles)
-% hObject    handle to FindColonies (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-if sum(size(handles.l))==0 %the list doesn't exist
-    errordlg('please load a image series')
-    return
-end
-handles.DelimitBordersBack=handles.DelimitBorders;
-% instructions to users
-set(handles.UserMess, 'String', 'Select three non-colinear points to delimit the petri dish surface');
-%get points
-[X, Y] = ginput(3);
-hold on;
-plot(X,Y,'*b');
-handles.DelimitBorders=[X,Y];
-[R,xcyc] =fit_circle_through_3_points(handles.DelimitBorders);
-plot(xcyc(1),xcyc(2),'*b');
-C=[xcyc(1),xcyc(2)];
-viscircles(C,R, 'Color','b');
-handles.AAc=C;
-handles.AAr=R;
-guidata(hObject,handles)
-saveall(handles);
-end
-function [R,xcyc] = fit_circle_through_3_points(ABC)
-    % FIT_CIRCLE_THROUGH_3_POINTS
-    % Mathematical background is provided in http://www.regentsprep.org/regents/math/geometry/gcg6/RCir.htm
-    %
-    % Input:
-    %
-    %   ABC is a [3 x 2n] array. Each two columns represent a set of three points which lie on
-    %       a circle. Example: [-1 2;2 5;1 1] represents the set of points (-1,2), (2,5) and (1,1) in Cartesian
-    %       (x,y) coordinates.
-    %
-    % Outputs:
-    %
-    %   R     is a [1 x n] array of circle radii corresponding to each set of three points.
-    %   xcyc  is an [2 x n] array of of the centers of the circles, where each column is [xc_i;yc_i] where i
-    %         corresponds to the {A,B,C} set of points in the block [3 x 2i-1:2i] of ABC
-    %
-    % Author: Danylo Malyuta.
-    % Version: v1.0 (June 2016)
-    % ----------------------------------------------------------------------------------------------------------
-    % Each set of points {A,B,C} lies on a circle. Question: what is the circles radius and center?
-    % A: point with coordinates (x1,y1)
-    % B: point with coordinates (x2,y2)
-    % C: point with coordinates (x3,y3)
-    % ============= Find the slopes of the chord A<-->B (mr) and of the chord B<-->C (mt)
-    %   mt = (y3-y2)/(x3-x2)
-    %   mr = (y2-y1)/(x2-x1)
-    % /// Begin by generalizing xi and yi to arrays of individual xi and yi for each {A,B,C} set of points provided in ABC array
-    x1 = ABC(1,1:2:end);
-    x2 = ABC(2,1:2:end);
-    x3 = ABC(3,1:2:end);
-    y1 = ABC(1,2:2:end);
-    y2 = ABC(2,2:2:end);
-    y3 = ABC(3,2:2:end);
-    % /// Now carry out operations as usual, using array operations
-    mr = (y2-y1)./(x2-x1);
-    mt = (y3-y2)./(x3-x2);
-    % A couple of failure modes exist:
-    %   (1) First chord is vertical       ==> mr==Inf
-    %   (2) Second chord is vertical      ==> mt==Inf
-    %   (3) Points are collinear          ==> mt==mr (NB: NaN==NaN here)
-    %   (4) Two or more points coincident ==> mr==NaN || mt==NaN
-    % Resolve these failure modes case-by-case.
-    idf1 = isinf(mr); % Where failure mode (1) occurs
-    idf2 = isinf(mt); % Where failure mode (2) occurs
-    idf34 = isequaln(mr,mt) | isnan(mr) | isnan(mt); % Where failure modes (3) and (4) occur
-    % ============= Compute xc, the circle center x-coordinate
-    xcyc = (mr.*mt.*(y3-y1)+mr.*(x2+x3)-mt.*(x1+x2))./(2*(mr-mt));
-    xcyc(idf1) = (mt(idf1).*(y3(idf1)-y1(idf1))+(x2(idf1)+x3(idf1)))/2; % Failure mode (1) ==> use limit case of mr==Inf
-    xcyc(idf2) = ((x1(idf2)+x2(idf2))-mr(idf2).*(y3(idf2)-y1(idf2)))/2; % Failure mode (2) ==> use limit case of mt==Inf
-    xcyc(idf34) = NaN; % Failure mode (3) or (4) ==> cannot determine center point, return NaN
-    % ============= Compute yc, the circle center y-coordinate
-    xcyc(2,:) = -1./mr.*(xcyc-(x1+x2)/2)+(y1+y2)/2;
-    idmr0 = mr==0;
-    xcyc(2,idmr0) = -1./mt(idmr0).*(xcyc(idmr0)-(x2(idmr0)+x3(idmr0))/2)+(y2(idmr0)+y3(idmr0))/2;
-    xcyc(2,idf34) = NaN; % Failure mode (3) or (4) ==> cannot determine center point, return NaN
-    % ============= Compute the circle radius
-    R = sqrt((xcyc(1,:)-x1).^2+(xcyc(2,:)-y1).^2);
-    R(idf34) = Inf; % Failure mode (3) or (4) ==> assume circle radius infinite for this case
-end
+
 %% apperance on images
 function updateRad_Callback(hObject, eventdata, handles)
 % hObject    handle to updateRad (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
-if sum(size(handles.l))==0 %the list doesn't exist
+if sum(size(handles.l))==0; %the list doesn't exist
     errordlg('please load a image series')
     return
 end
@@ -728,17 +664,19 @@ guidata(hObject,handles)
 
 end
 % Push buttons
-function FindColonies_Callback(hObject, eventdata, handles)
-% hObject    handle to FindColonies (see GCBO)
+function Recalc1_Callback(hObject, eventdata, handles) % --- Executes on button press in Recalc1, finds cicles in current image
+% hObject    handle to Recalc1 (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-if sum(size(handles.l))==0 %the list doesn't exist
+if sum(size(handles.l))==0; %the list doesn't exist
     errordlg('please load a image series')
     return
 end
+
 tic
 range1=[handles.minRadN handles.maxRadN];
 rgb = handles.rgb;
+%test=handles.sauvolarange
 %find circles
 set(handles.UserMess, 'String', 'calculating threshold...');guidata(hObject, handles);pause(0.05); %pause was needed to force refresh
 rgbT=sauvola(rgb(:,:,2), handles.sauvolarange); %thresholding on the rgb image
@@ -747,28 +685,103 @@ set(handles.UserMess, 'String', 'searching for colonies...');guidata(hObject, ha
     'ObjectPolarity','bright', 'Sensitivity',handles.sensitivityN, 'Method', 'Twostage');
 handles.counts{handles.i,1}=handles.centers;
 handles.counts{handles.i,2}=handles.radii;
-set(handles.UserMess, 'String', ['recalculated for image' num2str(handles.i)]);guidata(hObject, handles);
+
+guidata(hObject, handles);
+set(handles.UserMess, 'String', ['recalculated for image' num2str(handles.i)]);
 refresh(handles,0);
-guidata(hObject,handles);
 set(handles.timeRemain, 'String', ['took ',num2str(floor(toc)),' seconds for 1 frame']);
 end
-function FindColoniesAll_Callback(hObject, eventdata, handles) % --- Executes on button press in AnalyseAllImages.
-% hObject    handle to FindColoniesAll (see GCBO)
+function AnalyseAllImages_Callback(hObject, eventdata, handles) % --- Executes on button press in AnalyseAllImages.
+% hObject    handle to AnalyseAllImages (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-handles.i=1;
-refresh(handles,0);
-FindColonies_Callback(hObject, eventdata, handles);
+tic
+    rgb = handles.rgb;
+    range1=[handles.minRadN handles.maxRadN];
+    set(handles.UserMess, 'String', 'calculating threshold...');guidata(hObject, handles);pause(0.05); %pause was needed to force refresh
+        rgbT=sauvola(rgb(:,:,2), handles.sauvolarange); %thresholding on the rgb image
+        set(handles.UserMess, 'String', 'searching for colonies...');guidata(hObject, handles);pause(0.05); %pause was needed to force refresh
+        [handles.centers,handles.radii]= imfindcircles(rgbT,range1,...
+            'ObjectPolarity','bright', 'Sensitivity',handles.sensitivityN, 'Method', 'TwoStage');
+        handles.counts{handles.i,1}=handles.centers; 
+        handles.counts{handles.i,2}=handles.radii;
 
-while handles.i<length(handles.l)
-    handles.i=handles.i+1;
-    refresh(handles,0);
-    FindColonies_Callback(hObject, eventdata, handles);
+        guidata(hObject, handles);
+        set(handles.UserMess, 'String', ['recalculated for image' num2str(handles.i)]);
+    istart=handles.i;
+    while handles.i<length(handles.l) %going for all the next slides
+        %what could have been programmed
+        %         handles.i=handles.i+1
+        %         test = handles.i
+        %         %next_Callback(hObject, eventdata, handles)
+        %         guidata(hObject, handles);
+        %         Recalc1_Callback(hObject, eventdata, handles);
+        %         
+        %         set(handles.UserMess, 'String', ['recalculated for image' num2str(handles.i)]);
+        %         %refresh(handles); %might be slowing things down here, but well...
+        %         timeElapsed=floor(toc);
+        %         percDone=(handles.i-istart+1)/(length(handles.l)-istart+1)*100;
+        %         set(handles.timeRemain, 'String', {[num2str(percDone), '% done']; ['Est. ',...
+        %             num2str((1-percDone/100)*timeElapsed/percDone*100), 's remain' ]});
+        
+        %what was copy pasted
+        handles.i=handles.i+1;
+        guidata(hObject, handles);
+        refresh(handles,0);
+        range1=[handles.minRadN handles.maxRadN];
+        handles.rgb = imread([handles.dir, '/',handles.l(handles.i).name]); %load pic
+        rgb = handles.rgb;
+        
+        %find circles
+        set(handles.UserMess, 'String', 'calculating threshold...');guidata(hObject, handles);pause(0.05); %pause was needed to force refresh
+        rgbT=sauvola(rgb(:,:,2), handles.sauvolarange); %thresholding on the rgb image
+        set(handles.UserMess, 'String', 'searching for colonies...');guidata(hObject, handles);pause(0.05); %pause was needed to force refresh
+        [handles.centers,handles.radii]= imfindcircles(rgbT,range1,...
+            'ObjectPolarity','bright', 'Sensitivity',handles.sensitivityN, 'Method', 'TwoStage');
+        handles.counts{handles.i,1}=handles.centers; 
+        handles.counts{handles.i,2}=handles.radii;
+
+        guidata(hObject, handles);
+        set(handles.UserMess, 'String', ['recalculated for image' num2str(handles.i)]);
+        %refresh function has trouble updating the handle. reproducing it here
+            handles.rgb = imread([handles.dir, '/',handles.l(handles.i).name]); %load pic
+            hold off;
+            imshow(handles.rgb,'InitialMagnification', 25)
+
+            %showing circles (if handles.counts{handles.i,1} exists)
+            if handles.i<=size(handles.counts,1)
+                if ~isempty(handles.counts{handles.i,1})
+                    viscircles(handles.counts{handles.i,1},handles.counts{handles.i,2}*handles.apR); %ploting with small diameter to enhance visualisation
+                end
+                set(handles.NumCells, 'String', num2str(size(handles.counts{handles.i,2},1)));
+                if isempty(handles.centers)
+                    handles.centers=handles.counts{handles.i,1};
+                    handles.radii=handles.counts{handles.i,2}; %splitting in two variables
+                end
+            else 
+                handles.centers=[];
+                handles.radii=[]; %splitting in two variables
+            end
+            %updating user messages
+            set(handles.imageNumber, 'String', ['image number ',num2str(handles.i), ' out of ', num2str(length(handles.l))]); pause(0.05);
+            guidata(hObject, handles);
+            saveall(handles);
+
+        %message to user
+        timeElapsed=floor(toc);
+        percDone=(handles.i-istart+1)/(length(handles.l)-istart+1)*100;
+        remT=floor((1-percDone/100)*timeElapsed/percDone*100);
+        if remT<120
+            mess=[num2str(remT),' s'];
+        else
+            mess=[num2str(remT/60),' min'];
+        end
+        set(handles.timeRemain, 'String', {[num2str(percDone), '% done']; ['Est. ',mess, ' remain' ]});
+    end
+
+
 end
 
-end
-   
-  
 %functions for image analysis
 function output=sauvola(image, varargin)
 
@@ -899,8 +912,8 @@ if ~mod(n,2)
 end
 
 if (ndims(image)~=2)            % check for color pictures
-    disp('The input image must be a two dimensional array.')
-    disp('Consider using rgb2gray or similar function.')
+    display('The input image must be a two dimensional array.')
+    display('Consider using rgb2gray or similar function.')
     return
 end
 
@@ -930,9 +943,9 @@ image = cast(imageI, class(image));
 end % threshold function, downloaded from Matlab forum
 
 %% timelapse analysis
-function TimeCurves_Callback(hObject, eventdata, handles) % --- Executes on button press in RecalcNext.
+function RecalcNext_Callback(hObject, eventdata, handles) % --- Executes on button press in RecalcNext.
 % the computer will calculate the growth curves assuming the pictures folder is an ordered timelapse movie.
-if sum(size(handles.l))==0 %the list doesn't exist
+if sum(size(handles.l))==0; %the list doesn't exist
     errordlg('please load a image series')
     return
 end
@@ -943,7 +956,7 @@ dlg_title = 'Parameters for timelapse analysis (0=all, if several input separate
 defaultans = {'0','0'};
 answer = inputdlg(prompt,dlg_title,num_lines,defaultans);
 
-if isempty(answer); return; end %user cancelled
+if isempty(answer); return; end; %user cancelled
 
 %colonies
 UserColNb=str2num(answer{1,1}); %#ok<ST2NM> %user input
@@ -980,21 +993,20 @@ tres=handles.tres; % # of grid points for theta coordinate (change to needed bin
 %create empty variables
 Rad=cell(max(colList),length(timeList)); % a cell containing every colony for everytimepoint
 RadMean=nan(size(Rad)); %same, but will contain mean radii. A matrix is enough
+RadMean2=nan(size(Rad)); %same, but will contain mean radii. A matrix is enough
 
 tic
-disp ('starting analysis')
+set(handles.UserMess, 'String', 'starting analysis');
+refresh(handles,0);
 for whichTime=timeList %over times
     rgb=imread([handles.dir, '/',handles.l(whichTime).name]); %load image
+    
     for whichCol=colList %over all/userdefined Number colonies
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%    
         center=[round(handles.counts{handles.i,1}(whichCol,2)),round(handles.counts{handles.i,1}(whichCol,1))]; %contains the centers of colonies
         Zonesize=handles.Zonesize;
-        if(handles.counts{handles.i,2}(whichCol)==1)
-            Zone=100;
-        else
         Zone=round(handles.counts{handles.i,2}(whichCol)*Zonesize); %the analyzed zone is Zonesize fold bigger than the last radii
-        end
-        if center(1)-Zone<0 || center(1)+Zone>size(rgb,1) || center(2)-Zone<0 || center(2)+Zone >size(rgb,2)%the colony is two close from the border
+ if center(1)-Zone<0 || center(1)+Zone>size(rgb,1) || center(2)-Zone<0 || center(2)+Zone >size(rgb,2)%the colony is two close from the border
 
             if errColBorder==0
 
@@ -1003,8 +1015,8 @@ for whichTime=timeList %over times
             errColBorder=errColBorder+1;
 
             end
-        
-        else
+
+ else
         rgbcol=rgb(center(1)-Zone:center(1)+Zone,center(2)-Zone:center(2)+Zone,:); %for ploting purposes
         rgbcolG=rgb(center(1)-Zone:center(1)+Zone,center(2)-Zone:center(2)+Zone,2); %picking up subpart of the image for further analysis
         M=double(rgbcolG);   %convert to double for calculation 
@@ -1021,6 +1033,8 @@ for whichTime=timeList %over times
         
         % Define the resolution of the grid:
         rres=2*Zone; % # of grid points for R coordinate. (change to needed binning)
+        
+        %F = scatteredInterpolant(rho,theta,z,'linear'); %calculate interpolants >===============
         F = scatteredInterpolant(rho,theta,z,'nearest'); %calculate interpolants >===============
         
         %Evaluate the interpolant at the locations (rhoi, thetai).
@@ -1032,9 +1046,9 @@ for whichTime=timeList %over times
             subplot(1,3,1); imshow(rgbcol) ; axis square %#ok<*UNRCH>
             subplot(1,3,2); imagesc(Zinterp) ; axis square
             subplot(1,3,3); plot (Zinterp(1,:)); hold on;
-            for j=2:size(Zinterp,1) %finding colony
+            for j=2:size(Zinterp,1); %finding colony
                 plot (Zinterp(j,:));
-            end
+            end;
             hold off;
             title(['col ' num2str(whichCol) ', time ' num2str(whichTime) ]);
         end
@@ -1073,23 +1087,45 @@ for whichTime=timeList %over times
         
         RadMean(whichCol,whichTime)=nanmean(Rad{whichCol,whichTime})/sqrt(2); %the square root comes out upon transformation from square to circle
         
+        %test for a direct Hough transform
+        %a first radius estimate
+%         if whichTime<max(timeList) %it is not the first radius to find
+%             indic=find(timeList==whichTime); %finding wich is the 
+%             estimatedRad=RadMean2(whichCol,timeList(indic-1)); %taking last found radius
+%         else
+%             estimatedRad=handles.counts{handles.i,2}(whichCol); %taking radius entered by user
+%         end
+%         if estimatedRad<5; 
+%             radii=5:1:10;
+%         else
+%             radii=floor(estimatedRad*0.8):1:floor(estimatedRad*1.2);
+%         end
+%         e = edge(rgbcolG, 'canny'); %decting edges
+%         h = circle_hough(e, radii, 'same', 'normalise'); %performing circular hough transform
+%         peaks = circle_houghpeaks(h, radii, 'npeaks', 1);
+%         RadMean2(whichCol,whichTime)=peaks(3);
+        
         if showPlot
             subplot(1,3,2); hold on;
             plot(smooth(Rad{whichCol,whichTime},9),1:size(Zinterp,1), 'k', 'linewidth',2)
             subplot(1,3,1); hold on;
-            viscircles([X0,Y0],RadMean(whichCol,whichTime),'Color','b'); hold off;
+            viscircles([X0,Y0],RadMean(whichCol,whichTime),'Color','r'); hold off;
+            %viscircles([X0,Y0],RadMean2(whichCol,whichTime),'Color','b'); hold off;
             subplot(1,3,3); hold on; 
-            plot([0 size(Zinterp,2)],[Tresh*TreshVal Tresh*TreshVal],'b','linewidth',3)
+            plot([0 size(Zinterp,2)],[Tresh*TreshVal Tresh*TreshVal],'r','linewidth',3)
             plot([RadMean(whichCol,whichTime) RadMean(whichCol,whichTime)],[0 max(Zinterp(:))],'r','linewidth',3); hold off;
             pause (2)
-        end 
-         end % if a colony is too close from the border.... 
+        end
+ end % if a colony is too close from the border....   
     end %over all colonies
-    text=([num2str(floor(100*(1-((whichTime-deltaT)/(nbtimes))))),'% done, est. ' num2str(ceil(toc/(1-((whichTime-deltaT)/(nbtimes)))*((whichTime-deltaT)/(nbtimes))/60)), ' min remaining']);
-    set(handles.timeRemain, 'String', text);
-    disp(text);
+    text=([num2str(floor(100*(1-((whichTime-deltaT)/length(timeList))))),'% done, est. ' num2str(ceil(toc/(1-((whichTime-deltaT)/length(timeList)))*((whichTime-deltaT)/length(timeList))/60)), ' min remaining']);
+    set(handles.timeRemain, 'String', text); 
+    %disp(text);
+    guidata(hObject, handles);
 end %over all times
+set(handles.timeRemain, 'String', ['done: took ',num2str(toc/60) ,'min']); 
 handles.RadMean=RadMean;
+handles.RadMean2=RadMean2;
 handles.Rad=Rad;
 guidata(hObject,handles)
 saveall(handles);
@@ -1468,6 +1504,7 @@ end
 function refresh(handles, z)
 %this function could be optimized by updating the image only if it has
 %changed... need to separate graph and image for this
+
 % if z=1, zoom is kept
 handles.rgb = imread([handles.dir, '/',handles.l(handles.i).name]); %loading pic
 hold off;
@@ -1478,21 +1515,9 @@ if ~isempty(handles.im) && z==1
     xlim = handles.axes1.XLim;
 end
 
-handles.im=imshow(handles.rgb,'InitialMagnification', 25);
-
-if ~isempty(handles.AAc)
-       viscircles(handles.AAc,handles.AAr, 'Color','b');
-       hold on;
-       originalImage=handles.rgb;
-       [rows, columns, numberOfColorBands] = size(originalImage);
-       circleImage = false(rows, columns); 
-       [x, y] = meshgrid(1:columns, 1:rows); 
-       circleImage((x - handles.AAc(1)).^2 + (y - handles.AAc(2)).^2 <= handles.AAr.^2) = true; 
-       handles.rgb = bsxfun(@times, originalImage, cast(circleImage,class(originalImage)));
-       dist=regionprops(circleImage,'MajorAxisLength');
-       handles.d=round(dist.MajorAxisLength);
-       set(handles.UserMess, 'String', ['OK diameter =',num2str(handles.d)]);
-end
+%update image
+%subplot('Position', [0 0 1 1]); %going from subplot to plot in one image
+%close;
 handles.im=imshow(handles.rgb,'InitialMagnification', 25);
 
 if ~isempty(handles.counts{handles.i,1})
@@ -1500,7 +1525,7 @@ if ~isempty(handles.counts{handles.i,1})
         viscircles(handles.counts{handles.i,1},ones(size(handles.counts{handles.i,2}))*10*handles.apR,'Color', 'b'); %ploting with a 10x diameter to enhance visualisation
     else
         viscircles(handles.counts{handles.i,1},handles.counts{handles.i,2}*handles.apR, 'Color', 'b'); %ploting with actual diameter x user factor
-    end%ploting with small diameter to enhance visualisation
+    end
 end
 
 set(handles.NumCells, 'String', num2str(size(handles.counts{handles.i,2},1)));
@@ -1514,36 +1539,40 @@ if ~isempty(xlim) && z==1
     handles.axes1.YLim=ylim;
 end
 
+
+
 %updating user messages
 set(handles.imageNumber, 'String', ['image number ',num2str(handles.i), ' out of ', num2str(length(handles.l))]); pause(0.05);
+
 saveall(handles);
 
 % Update handles structure
 guidata(handles.figure1, handles);
+
 end
 function saveall(handles)
 %create internal variables to be saved
 counts=handles.counts; %#ok<NASGU>
 i=handles.i;%#ok<NASGU>
 Rad=handles.Rad;%#ok<NASGU>
+RadMean2=handles.RadMean2;%#ok<NASGU>
 RadMean=handles.RadMean;%#ok<NASGU>
 dir=handles.dir;%#ok<NASGU>
 minRad=handles.minRadN;%#ok<NASGU>
 maxRad=handles.maxRadN;%#ok<NASGU>
 sensitivity=handles.sensitivityN;%#ok<NASGU>
-AAc=handles.AAc;
-AAr=handles.AAr;
 
 save([handles.dir '/sidesave.mat'],'counts') %to be place on a step by step save
 save([handles.dir '/stoped_at.mat'],'i')
-%save([handles.dir '/Rad.mat'],'Rad')
+save([handles.dir '/Rad.mat'],'Rad')
 save([handles.dir '/RadMean.mat'],'RadMean')
-
+save([handles.dir '/RadMean2.mat'],'RadMean2')
 
 %also with date to avoid too much loss in case of crash
 save([handles.dir '/' date 'sidesave.mat'],'counts') %to be place on a step by step save
 save([handles.dir '/' date 'stoped_at.mat'],'i')
-%save([handles.dir '/' date 'Rad.mat'],'Rad')
+save([handles.dir '/' date 'Rad.mat'],'Rad')
+save([handles.dir '/' date 'RadMean2.mat'],'RadMean2')
 del=strfind(handles.dir,'/'); %looking for delimiter in folder name
 if isempty(del)
     del=strfind(handles.dir,'\'); %because windows and mac have different delimiters
@@ -1551,7 +1580,7 @@ end
 if isempty(del)
     del=strfind(handles.dir,'\'); %because windows and mac have different delimiters
 end
-save([handles.dir handles.dir(del(end-1):del(end)-1) '_all.mat'], 'counts','i','dir', 'minRad','maxRad', 'sensitivity','RadMean','AAc','AAr')
+save([handles.dir handles.dir(del(end-1):del(end)-1) '_all.mat'], 'counts','i','dir', 'minRad','maxRad', 'sensitivity','RadMean','RadMean2','Rad')
 
 end
 function saveall_Callback(hObject, eventdata, handles) % --- Executes on button press in saveall.
@@ -1572,7 +1601,6 @@ end
 
 handles.centers=handles.centersBack; %saving for undo purpose
 handles.radii=handles.radiiBack; %saving for undo purpose
-handles.DelimitBorders=handles.DelimitBordersBack;%saving for undo purpose
 handles.counts{handles.i,1}=handles.centers;
 handles.counts{handles.i,2}=handles.radii;
 guidata(handles.figure1, handles);
@@ -1668,8 +1696,11 @@ function AddOnlyCenters_Callback(hObject, eventdata, handles) % --- Executes on 
 % hObject    handle to AddOnlyCenters (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+% Hint: get(hObject,'Value') returns toggle state of AddOnlyCenters
+
 handles.OnlyCenterTick=get(hObject,'Value'); %getting value
 guidata(hObject,handles) %refreshing object
+
 
 end
 function Showdust_Callback(hObject, eventdata, handles) % --- Executes on button press in Showdust.
@@ -1731,7 +1762,7 @@ function zoomdezoom()
 %     assert(sum(TF)==1);
 % loc
 %     htb = htbA(loc);
-end
+% end
 function children = getAllChildren( hObject )
 % Performs  ch = get(hObject,'children') with ShowHiddenHandles == 'on'
 
@@ -1745,7 +1776,16 @@ delete(tmp);
 
 end
 
-
-
-
-
+% htb3.ClickedCallback = ...
+%     @(varargin) fkWrapper(hObject,'pan',mode);
+% 
+% end
+% function fkWrapper(hObject,passedArg,mode)
+% % Evaluate built-in matlab callback, and restore overwritten custom
+% % callbacks.
+% 
+%     putdowntext(passedArg,gcbo);
+%     updateCallbacks(hObject,mode);
+%     
+% end
+end

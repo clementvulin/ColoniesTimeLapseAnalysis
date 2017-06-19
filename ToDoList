@@ -1,0 +1,8 @@
+This is a To Do list for the program, including wishes (W) and bugs or problems (B)
+- allow the user to select the contrasting program (W)
+- allow the user to select the colony detection program (W)
+- auto detect the plate to minimize analysis time (W)
+- add a function to add centers without bothering with diameter (counts only) (W)
+- minimize manual analysis time by clever uploading of picture (compressed?) and clever refresh (B)
+- get better analysis for timelapse: edge detection from outside (B)
+- 
